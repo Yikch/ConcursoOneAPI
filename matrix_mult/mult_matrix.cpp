@@ -45,6 +45,11 @@ void matrix_mult_hierarchy(sycl::queue Q, float *a, float *b, float *c, int N)
 				// kernel function is executed once per work-group
 			int ib = grp.get_id(0);
 			int jb = grp.get_id(1);
+			// 32/16 = 2 
+			// num_groups = 2
+			// group_size = 16
+			// 0,0  0,1  1,0  1,1
+			// 
 			grp.parallel_for_work_item([&](h_item<2> it) {
 				// kernel function is executed once per work-item
 				int i = ib * B + it.get_local_id(0);
@@ -57,37 +62,54 @@ void matrix_mult_hierarchy(sycl::queue Q, float *a, float *b, float *c, int N)
 		});
 		/* TODO: Create a hierarchy parallelism */
 		
-
 	}).wait();  // End of the queue commands we waint on the event reported.
 }
 
 void matrix_mult_local(sycl::queue Q, float *a, float *b, float *c, int N)
 {
 
-	// Local accessor, for one matrix tile:
 	constexpr int tile_size = 16;
-
-
-	// Create a command_group to issue command to the group
-	Q.submit([&](handler &h) {/*
-	const int B = 16;
-	range global = range<2>(N, N);
-	range local = range<2>(B, B);
-	h.parallel_for(global, local, [=](nd_item<2> item){
-		auto i = item.get_global_id()[0];
-		auto j = item.get_global_id()[1];
-		// CODE THAT RUNS ON DEVICE
-		c[i*N+j] = 0.0f;
-		for(int k=0; k<N; k++)
-			c[i*N+j] += a[i*N+k]*b[k*N+j];
-	}); */
-		// End of the kernel function
-		/* TODO: Create local memory */
-
-		/* TODO: Submit the kernel */
-
-	}).wait();  // End of the queue commands we waint on the event reported.
-
+	
+	Q.submit([&](handler &h) {
+		// Local accessor, for one matrix tile:
+		
+		accessor<float, 2, sycl::access::mode::read_write,
+			sycl::access::target::local> tileA(range<2>(tile_size,tile_size), h);
+		accessor<float, 2, sycl::access::mode::read_write,
+			sycl::access::target::local> tileB(range<2>(tile_size,tile_size), h);
+		// Submit the kernel
+		h.parallel_for(nd_range<2>{range<2>(N, N), range<2>(tile_size, tile_size
+			)}, [=](nd_item<2> item){
+			auto n = item.get_global_id()[0];
+			auto m = item.get_global_id()[1];
+			// Index in the local index space:
+			auto j = item.get_local_id()[0];
+			auto i = item.get_local_id()[1];
+			float sum = 0;
+			// (m,n){
+			// 	(i,j) {
+			//	 tile(16x16)
+			//  }
+			// }
+			for (int kk = 0; kk < N; kk += tile_size) {
+				// Load the matrix A, matrix B and synchronize
+				// to ensure all work-items have a consistent view
+				// of the matrix tile in local memory.
+				tileA[i][j] = a[m*N+j+kk];
+				tileB[i][j] = b[(i+kk)*N+n];
+				item.barrier();
+				// Perform computation using the local memory tile
+				for (int k = 0; k < tile_size; k++)
+					sum += tileA[i][k] * tileB[k][j];
+				// After computation, synchronize again, to ensure all
+				// reads from the local memory tile are complete.
+				item.barrier();
+			}
+			// Write the final result to global memory.
+			c[m*N+n] = sum;
+		}); // End of the kernel function
+	}).wait(); // End of the queue commands we waint on the event reported.
+	
 }
 
 int check_results(float *c, float *c_test, int N)
