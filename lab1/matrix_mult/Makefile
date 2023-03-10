@@ -5,7 +5,7 @@ NVCC = nvcc
 CFLAGS=-O3 -I. -I/usr/local/cuda/include 
 CXXFLAGS=-O3 -I. -I/usr/local/cuda/include
 
-LIBS = -lm -lcuda -lcudart
+LIBS = -lm -lcuda -L/usr/local/cuda/lib64/ -lcudart
 
 SRC =  main.o matrix_mul.o
 	

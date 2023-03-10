@@ -5,7 +5,7 @@
 #define BLOCK_SIZE 16 
 
 // Forward declaration of the device multiplication function
-__global__ void Muld(float*, float*, int, int, float*);
+__global__ void Muld(float*, float*,int , int, int, float*);
 
 // Host multiplication function
 // Compute C = A * B
@@ -14,7 +14,8 @@ __global__ void Muld(float*, float*, int, int, float*);
 // wB is the width of B
 
 
-void Mul___(float* A, float* B, int hA, int wA, int wB, float* C)
+void Mul(float* A, float* B, int hA, int wA, int wB,
+	float* C)
 {
 	int size;
 
@@ -39,7 +40,7 @@ void Mul___(float* A, float* B, int hA, int wA, int wB, float* C)
 	dim3 dimGrid(wB / dimBlock.x, hA / dimBlock.y);
 
 	// Launch the device computation
-	Muld<<<dimGrid, dimBlock>>>(Ad, Bd, wA, wB, Cd);
+	Muld<<<dimGrid, dimBlock>>>(Ad, Bd, hA, wA, wB, Cd);
 
 	// Read C from the device
 	cudaMemcpy(C, Cd, size, cudaMemcpyDeviceToHost);
@@ -50,9 +51,17 @@ void Mul___(float* A, float* B, int hA, int wA, int wB, float* C)
 	cudaFree(Cd);
 }
 
-__global__ void Muld(float* A, float* B, int wA, int wB, float* C)
+__global__ void Muld(float* A, float* B, int hA, int wA, int wB, float* C)
 {
-	//To Do
+	int i = threadIdx.y + blockDim.y * blockIdx.y;
+	int j = threadIdx.x + blockDim.x * blockIdx.x;
+	int k;
+	int size = i*wB+j;
+	if(size < hA*wB){
+		for (k = 0; k < wA; k++) {
+			C[size] += A[i*wA+k]*B[k*wB+j];
+		}
+	}
 }
 
 #if 0
@@ -60,7 +69,7 @@ __global__ void Muld(float* A, float* B, int wA, int wB, float* C)
 // Compute C = A * B
 // wA is the width of A
 // wB is the width of B
-__global__ void Muld(float* A, float* B, int wA, int wB, float* C)
+__global__ void Muld2(float* A, float* B, int wA, int wB, float* C)
 {
 	// Block index
 	int bx = blockIdx.x;

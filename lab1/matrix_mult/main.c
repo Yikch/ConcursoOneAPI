@@ -95,7 +95,7 @@ int main(int argc, char** argv)
 	}
 
 
-	Mul___(A, B, hA, wA, wB, C);
+	Mul(A, B, hA, wA, wB, C);
 	//printf("\n\nMATRIX A\n");print_matrix(A, hA, wA);
 	//printf("\n\nMATRIX B\n");print_matrix(B, hB, wB);
 	//printf("\n\nMATRIX C\n");print_matrix(C, hA, wB);
