@@ -1,6 +1,7 @@
 Información del dispositivo disponible. Ver http://en.wikipedia.org/wiki/CUDA
 
 CUDA SDK en /usr/local/cuda
+Para export el PATH: export PATH=$PATH:/usr/local/cuda-11.7/bin/
 
 Compilación:
 >> nvcc device_info.cu
