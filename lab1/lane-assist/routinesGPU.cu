@@ -5,10 +5,35 @@
 
 #include "routinesGPU.h"
 
-#define NTHREADS 32
-#define TILE_DIM 5
+#define NTHREADS 25
+#define TILE_DIM 25
 
-__global__ void gpu_canny(uint8_t *im, uint8_t *image_out,
+__global__ void gpu_canny_nr(uint8_t *im, uint8_t *image_out,
+	float *NR, float *G, float *phi, float *Gx, float *Gy, uint8_t *pedge,
+	float level, int height, int width)
+{
+	int i, j; 
+	__shared__ float tile [ TILE_DIM ] [ TILE_DIM+1 ]; 
+	i = blockIdx.y * blockDim.y + threadIdx.y; 
+	j = blockIdx.x * blockDim.x + threadIdx.x; 
+	if(i<height && j<width){
+		tile[threadIdx.y][threadIdx.x] = im[i*width+j];
+		__syncthreads();
+		if(i>=2 && i<height-2 && j >=2 && j<width-2){
+			// Noise reduction
+			NR[i*width+j] =
+					(2.0*tile[threadIdx.y-2][width+(j-2)] +  4.0*im[(i-2)*width+(j-1)] +  5.0*im[(i-2)*width+(j)] +  4.0*im[(i-2)*width+(j+1)] + 2.0*im[(i-2)*width+(j+2)]
+				+ 4.0*im[(i-1)*width+(j-2)] +  9.0*im[(i-1)*width+(j-1)] + 12.0*im[(i-1)*width+(j)] +  9.0*im[(i-1)*width+(j+1)] + 4.0*im[(i-1)*width+(j+2)]
+				+ 5.0*im[(i  )*width+(j-2)] + 12.0*im[(i  )*width+(j-1)] + 15.0*im[(i  )*width+(j)] + 12.0*im[(i  )*width+(j+1)] + 5.0*im[(i  )*width+(j+2)]
+				+ 4.0*im[(i+1)*width+(j-2)] +  9.0*im[(i+1)*width+(j-1)] + 12.0*im[(i+1)*width+(j)] +  9.0*im[(i+1)*width+(j+1)] + 4.0*im[(i+1)*width+(j+2)]
+				+ 2.0*im[(i+2)*width+(j-2)] +  4.0*im[(i+2)*width+(j-1)] +  5.0*im[(i+2)*width+(j)] +  4.0*im[(i+2)*width+(j+1)] + 2.0*im[(i+2)*width+(j+2)])
+				/159.0;
+		}
+	}
+
+}
+
+__global__ void gpu_canny_gradient(uint8_t *im, uint8_t *image_out,
 	float *NR, float *G, float *phi, float *Gx, float *Gy, uint8_t *pedge,
 	float level, int height, int width)
 {
@@ -17,6 +42,17 @@ __global__ void gpu_canny(uint8_t *im, uint8_t *image_out,
 	i = blockIdx.y * blockDim.y + threadIdx.y; 
 	j = blockIdx.x * blockDim.x + threadIdx.x; 
 }
+
+__global__ void gpu_canny_edge(uint8_t *im, uint8_t *image_out,
+	float *NR, float *G, float *phi, float *Gx, float *Gy, uint8_t *pedge,
+	float level, int height, int width)
+{
+	int i, j; 
+	__shared__ float tile [ TILE_DIM ] [ TILE_DIM+1 ]; 
+	i = blockIdx.y * blockDim.y + threadIdx.y; 
+	j = blockIdx.x * blockDim.x + threadIdx.x; 
+}
+
 __global__ void gpu_hough(uint8_t *im, int width, int height, uint32_t *accumulators, int accu_width, int accu_height, 
 	float *sin_table, float *cos_table)
 {
@@ -103,11 +139,11 @@ void line_asist_GPU(uint8_t *im, int height, int width,
 	/* CUDA vesion */
 
 	dim3 dimBlock(NTHREADS,NTHREADS);
-	int blocks = (height*width/25)/NTHREADS;
-	if ((height*width/25)%NTHREADS>0) blocks++;
+	int blocks = (height*width)/NTHREADS;
+	if ((height*width)%NTHREADS>0) blocks++;
 	dim3 dimGrid(blocks, blocks);
 
-	gpu_canny<<<dimGrid,dimBlock>>>(im, imEdge, NR, G, phi, Gx, Gy, pedge,
+	gpu_canny_nr<<<dimGrid,dimBlock>>>(im, imEdge, NR, G, phi, Gx, Gy, pedge,
 		1000.0f, //level
 		height, width);	
 	cudaDeviceSynchronize();
