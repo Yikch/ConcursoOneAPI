@@ -138,19 +138,23 @@ __global__ void gpu_hough_exec(uint8_t *im, int width, int height, uint32_t *acc
 	float *sin_table, float *cos_table)
 {
 	int i, j, theta;
+	float rho;
 	float hough_h = ((sqrt(2.0) * (float)(height>width?height:width)) / 2.0);
 	float center_x = width/2.0; 
 	float center_y = height/2.0;
 	i = blockIdx.y * blockDim.y + threadIdx.y; 
 	j = blockIdx.x * blockDim.x + threadIdx.x; 
+	
 	if(i<height && j<width){
 		if( im[ (i*width) + j] > 250 ) // Pixel is edge  
 			{  
 				for(theta=0;theta<180;theta++)  
 				{  
-					float rho = ( ((float)j - center_x) * cos_table[theta]) + (((float)i - center_y) * sin_table[theta]);
+					rho = ( ((float)j - center_x) * cos_table[theta]) + (((float)i - center_y) * sin_table[theta]);
 					accumulators[ (int)((round(rho + hough_h) * 180.0)) + theta]++;
-
+					if(accumulators[36*width+709]>0){
+						int prueba = 1;
+					}
 				} 
 			} 
 	}
@@ -492,19 +496,25 @@ void line_asist_GPU(uint8_t *im, int height, int width,
 			/*if(G[i*width+j] != G_CPU[i*width+j]){
 				printf("G!= : G_GPU[%d][%d]: %f  G_CPU[%d][%d]: %f\n", i, j, G[i*width+j], i,j,G_CPU[i*width+j]);
 				desigual++;
-			} POCA DIFERENCIA*/
+			} BIEN */
+			
 			/*if(pedge[i*width+j] != pedge_CPU[i*width+j]){
 				printf("pedge!= : pedge_GPU[%d][%d]: %d  pedge_CPU[%d][%d]: %d\n", i, j, pedge[i*width+j], i,j,pedge_CPU[i*width+j]);
 				desigual++;
-			}*/
+			} BIEN */
 			/*if(phi[i*width+j] != phi_CPU[i*width+j]){
 				printf("phi!= : phi_GPU[%d][%d]: %f  phi_CPU[%d][%d]: %f\n", i, j, phi[i*width+j], i,j,phi_CPU[i*width+j]);
-				desigual=1;
+				desigual++;
 			} BIEN */
-			/*if(accum[i*width+j] != accum_CPU[i*width+j]){
+			/*if(imEdge[i*width+j] != imEdge_CPU[i*width+j]){
+				printf("imEdge!= : imEdge_GPU[%d][%d]: %d  imEdge_CPU[%d][%d]: %d\n", i, j, imEdge[i*width+j], i,j,imEdge_CPU[i*width+j]);
+				desigual++;
+			} BIEN */
+			if(accum[i*width+j] != accum_CPU[i*width+j]){
 				printf("accum!= : accum_GPU[%d][%d]: %d  accum_CPU[%d][%d]: %d\n", i, j, accum[i*width+j], i,j,accum_CPU[i*width+j]);
-				desigual=1;
-			}*/
+				desigual++;
+			}
+			
 			j++;
 		}
 		i++;

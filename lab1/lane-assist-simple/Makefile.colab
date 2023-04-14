@@ -8,22 +8,23 @@ CXX_OPENCV_FLAGS+=`pkg-config opencv --cflags`
 LD_OPENCV_FLAGS+=`pkg-config opencv --libs`
 
 
-CFLAGS=-O0 -I. 
+CFLAGS=-O0 -I. -g
 CXXFLAGS=-O0 -I.
+NVFLAGS=$(CFLAGS) -G
 
 LIBS =-lpng -lm
 
 SRC = png_io.o routinesCPU.o routinesGPU.o main.o
 	
 %.o: %.c
-	$(NVCC) $(CFLAGS) -g -G -c -o $@ $<
+	$(NVCC) $(CFLAGS) -c -o $@ $<
 
 %.o: %.cu
-	$(NVCC) $(CFLAGS) -g -G -c -o $@ $<
+	$(NVCC) $(NVFLAGS) -c -o $@ $<
 
 
 %.o: %.cpp
-	$(NVCC) $(CXXFLAGS) -g -G -c -o $@ $<
+	$(NVCC) $(CXXFLAGS) -c -o $@ $<
 
 image: $(SRC) 
 	$(NVCC) -o image  $(SRC) $(CXXFLAGS) $(LIBS) 
