@@ -1,0 +1,32 @@
+
+CXX = g++
+CC = gcc
+NVCC = nvcc
+
+#OpenCV
+CXX_OPENCV_FLAGS+=`pkg-config opencv --cflags`
+LD_OPENCV_FLAGS+=`pkg-config opencv --libs`
+
+
+CFLAGS=-O0 -I. 
+CXXFLAGS=-O0 -I.
+
+LIBS =-lpng -lm
+
+SRC = png_io.o routinesCPU.o routinesGPU.o main.o
+	
+%.o: %.c
+	$(NVCC) $(CFLAGS) -g -G -c -o $@ $<
+
+%.o: %.cu
+	$(NVCC) $(CFLAGS) -g -G -c -o $@ $<
+
+
+%.o: %.cpp
+	$(NVCC) $(CXXFLAGS) -g -G -c -o $@ $<
+
+image: $(SRC) 
+	$(NVCC) -o image  $(SRC) $(CXXFLAGS) $(LIBS) 
+
+clean:
+	rm -f *.o image
