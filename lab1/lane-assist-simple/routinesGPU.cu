@@ -124,42 +124,6 @@ __global__ void gpu_canny_out(uint8_t *im, uint8_t *image_out,
 }
 
 
-__global__ void gpu_hough_init(uint8_t *im, int width, int height, uint32_t *accumulators, int accu_width, int accu_height, 
-	float *sin_table, float *cos_table)
-{
-	int j;
-	j = blockIdx.x * blockDim.x + threadIdx.x;
-	if(j<(accu_width*accu_height)){
-		accumulators[j]=0;
-	}
-}
-
-__global__ void gpu_hough_exec(uint8_t *im, int width, int height, uint32_t *accumulators, int accu_width, int accu_height, 
-	float *sin_table, float *cos_table)
-{
-	int i, j, theta;
-	float rho;
-	float hough_h = ((sqrt(2.0) * (float)(height>width?height:width)) / 2.0);
-	float center_x = width/2.0; 
-	float center_y = height/2.0;
-	i = blockIdx.y * blockDim.y + threadIdx.y; 
-	j = blockIdx.x * blockDim.x + threadIdx.x; 
-	
-	if(i<height && j<width){
-		if( im[ (i*width) + j] > 250 ) // Pixel is edge  
-			{  
-				for(theta=0;theta<180;theta++)  
-				{  
-					rho = ( ((float)j - center_x) * cos_table[theta]) + (((float)i - center_y) * sin_table[theta]);
-					accumulators[ (int)((round(rho + hough_h) * 180.0)) + theta]++;
-					if(accumulators[36*width+709]>0){
-						int prueba = 1;
-					}
-				} 
-			} 
-	}
-}
-
 void getlines(int threshold, uint32_t *accumulators, int accu_width, int accu_height, int width, int height, 
 	float *sin_table, float *cos_table,
 	int *x1_lines, int *y1_lines, int *x2_lines, int *y2_lines, int *lines)
@@ -176,9 +140,9 @@ void getlines(int threshold, uint32_t *accumulators, int accu_width, int accu_he
 			{  
 				//Is this point a local maxima (9x9)  
 				max = accumulators[(rho*accu_width) + theta]; 
-				for(int ii=-4;ii<=4;ii++)  
+				for(ii=-4;ii<=4;ii++)  
 				{  
-					for(int jj=-4;jj<=4;jj++)  
+					for(jj=-4;jj<=4;jj++)  
 					{  
 						if( (ii+rho>=0 && ii+rho<accu_height) && (jj+theta>=0 && jj+theta<accu_width) )  
 						{  
@@ -228,107 +192,8 @@ void getlines(int threshold, uint32_t *accumulators, int accu_width, int accu_he
 	}
 }
 
-// Para comprobar las imagenes
-void canny(uint8_t *im, uint8_t *image_out,
-	float *NR, float *G, float *phi, float *Gx, float *Gy, uint8_t *pedge,
-	float level,
-	int height, int width)
-{
-	int i, j;
-	int ii, jj;
-	float PI = 3.141593;
-
-	float lowthres, hithres;
-
-	for(i=2; i<height-2; i++)
-		for(j=2; j<width-2; j++)
-		{
-			// Noise reduction
-			NR[i*width+j] =
-				 (2.0*im[(i-2)*width+(j-2)] +  4.0*im[(i-2)*width+(j-1)] +  5.0*im[(i-2)*width+(j)] +  4.0*im[(i-2)*width+(j+1)] + 2.0*im[(i-2)*width+(j+2)]
-				+ 4.0*im[(i-1)*width+(j-2)] +  9.0*im[(i-1)*width+(j-1)] + 12.0*im[(i-1)*width+(j)] +  9.0*im[(i-1)*width+(j+1)] + 4.0*im[(i-1)*width+(j+2)]
-				+ 5.0*im[(i  )*width+(j-2)] + 12.0*im[(i  )*width+(j-1)] + 15.0*im[(i  )*width+(j)] + 12.0*im[(i  )*width+(j+1)] + 5.0*im[(i  )*width+(j+2)]
-				+ 4.0*im[(i+1)*width+(j-2)] +  9.0*im[(i+1)*width+(j-1)] + 12.0*im[(i+1)*width+(j)] +  9.0*im[(i+1)*width+(j+1)] + 4.0*im[(i+1)*width+(j+2)]
-				+ 2.0*im[(i+2)*width+(j-2)] +  4.0*im[(i+2)*width+(j-1)] +  5.0*im[(i+2)*width+(j)] +  4.0*im[(i+2)*width+(j+1)] + 2.0*im[(i+2)*width+(j+2)])
-				/159.0;
-		}
-
-
-	for(i=2; i<height-2; i++)
-		for(j=2; j<width-2; j++)
-		{
-			// Intensity gradient of the image
-			Gx[i*width+j] = 
-				 (1.0*NR[(i-2)*width+(j-2)] +  2.0*NR[(i-2)*width+(j-1)] +  (-2.0)*NR[(i-2)*width+(j+1)] + (-1.0)*NR[(i-2)*width+(j+2)]
-				+ 4.0*NR[(i-1)*width+(j-2)] +  8.0*NR[(i-1)*width+(j-1)] +  (-8.0)*NR[(i-1)*width+(j+1)] + (-4.0)*NR[(i-1)*width+(j+2)]
-				+ 6.0*NR[(i  )*width+(j-2)] + 12.0*NR[(i  )*width+(j-1)] + (-12.0)*NR[(i  )*width+(j+1)] + (-6.0)*NR[(i  )*width+(j+2)]
-				+ 4.0*NR[(i+1)*width+(j-2)] +  8.0*NR[(i+1)*width+(j-1)] +  (-8.0)*NR[(i+1)*width+(j+1)] + (-4.0)*NR[(i+1)*width+(j+2)]
-				+ 1.0*NR[(i+2)*width+(j-2)] +  2.0*NR[(i+2)*width+(j-1)] +  (-2.0)*NR[(i+2)*width+(j+1)] + (-1.0)*NR[(i+2)*width+(j+2)]);
-
-
-			Gy[i*width+j] = 
-				 ((-1.0)*NR[(i-2)*width+(j-2)] + (-4.0)*NR[(i-2)*width+(j-1)] +  (-6.0)*NR[(i-2)*width+(j)] + (-4.0)*NR[(i-2)*width+(j+1)] + (-1.0)*NR[(i-2)*width+(j+2)]
-				+ (-2.0)*NR[(i-1)*width+(j-2)] + (-8.0)*NR[(i-1)*width+(j-1)] + (-12.0)*NR[(i-1)*width+(j)] + (-8.0)*NR[(i-1)*width+(j+1)] + (-2.0)*NR[(i-1)*width+(j+2)]
-				+    2.0*NR[(i+1)*width+(j-2)] +    8.0*NR[(i+1)*width+(j-1)] +    12.0*NR[(i+1)*width+(j)] +    8.0*NR[(i+1)*width+(j+1)] +    2.0*NR[(i+1)*width+(j+2)]
-				+    1.0*NR[(i+2)*width+(j-2)] +    4.0*NR[(i+2)*width+(j-1)] +     6.0*NR[(i+2)*width+(j)] +    4.0*NR[(i+2)*width+(j+1)] +    1.0*NR[(i+2)*width+(j+2)]);
-
-			G[i*width+j]   = sqrtf((Gx[i*width+j]*Gx[i*width+j])+(Gy[i*width+j]*Gy[i*width+j]));	//G = √Gx²+Gy²
-			phi[i*width+j] = atan2f(fabs(Gy[i*width+j]),fabs(Gx[i*width+j]));
-
-			if(fabs(phi[i*width+j])<=PI/8 )
-				phi[i*width+j] = 0;
-			else if (fabs(phi[i*width+j])<= 3*(PI/8))
-				phi[i*width+j] = 45;
-			else if (fabs(phi[i*width+j]) <= 5*(PI/8))
-				phi[i*width+j] = 90;
-			else if (fabs(phi[i*width+j]) <= 7*(PI/8))
-				phi[i*width+j] = 135;
-			else phi[i*width+j] = 0;
-	}
-
-	// Edge
-	for(i=3; i<height-3; i++)
-		for(j=3; j<width-3; j++)
-		{
-			pedge[i*width+j] = 0;
-			if(phi[i*width+j] == 0){
-				if(G[i*width+j]>G[i*width+j+1] && G[i*width+j]>G[i*width+j-1]) //edge is in N-S
-					pedge[i*width+j] = 1;
-
-			} else if(phi[i*width+j] == 45) {
-				if(G[i*width+j]>G[(i+1)*width+j+1] && G[i*width+j]>G[(i-1)*width+j-1]) // edge is in NW-SE
-					pedge[i*width+j] = 1;
-
-			} else if(phi[i*width+j] == 90) {
-				if(G[i*width+j]>G[(i+1)*width+j] && G[i*width+j]>G[(i-1)*width+j]) //edge is in E-W
-					pedge[i*width+j] = 1;
-
-			} else if(phi[i*width+j] == 135) {
-				if(G[i*width+j]>G[(i+1)*width+j-1] && G[i*width+j]>G[(i-1)*width+j+1]) // edge is in NE-SW
-					pedge[i*width+j] = 1;
-			}
-		}
-
-	// Hysteresis Thresholding
-	lowthres = level/2;
-	hithres  = 2*(level);
-
-	for(i=3; i<height-3; i++)
-		for(j=3; j<width-3; j++)
-		{
-			image_out[i*width+j] = 0;
-			if(G[i*width+j]>hithres && pedge[i*width+j])
-				image_out[i*width+j] = 255;
-			else if(pedge[i*width+j] && G[i*width+j]>=lowthres && G[i*width+j]<hithres)
-				// check neighbours 3x3
-				for (ii=-1;ii<=1; ii++)
-					for (jj=-1;jj<=1; jj++)
-						if (G[(i+ii)*width+j+jj]>hithres)
-							image_out[i*width+j] = 255;
-		}
-}
-
-//Para comprobar hough
+//Houghtransform en CPU porque accede a accumulators de forma que puede hacer accesos 
+// simultaneos a memoria que causa error
 void houghtransform(uint8_t *im, int width, int height, uint32_t *accumulators, int accu_width, int accu_height, 
 	float *sin_table, float *cos_table)
 {
@@ -351,7 +216,7 @@ void houghtransform(uint8_t *im, int width, int height, uint32_t *accumulators, 
 				{  
 					float rho = ( ((float)j - center_x) * cos_table[theta]) + (((float)i - center_y) * sin_table[theta]);
 					accumulators[ (int)((round(rho + hough_h) * 180.0)) + theta]++;
-
+					
 				} 
 			} 
 		} 
@@ -362,30 +227,9 @@ void line_asist_GPU(uint8_t *im, int height, int width,
 	uint8_t *imEdge, float *NR, float *G, float *phi, float *Gx, float *Gy, uint8_t *pedge,
 	float *sin_table, float *cos_table, 
 	uint32_t *accum, int accu_height, int accu_width,
-	int *x1, int *x2, int *y1, int *y2, int *nlines)
+	int *x1, int *y1, int *x2, int *y2, int *nlines)
 {
 	int threshold;
-
-	// Create temporal buffers 
-	uint8_t *imEdge_CPU = (uint8_t *)malloc(sizeof(uint8_t) * width * height);
-	float *NR_CPU = (float *)malloc(sizeof(float) * width * height);
-	float *G_CPU = (float *)malloc(sizeof(float) * width * height);
-	float *phi_CPU = (float *)malloc(sizeof(float) * width * height);
-	float *Gx_CPU = (float *)malloc(sizeof(float) * width * height);
-	float *Gy_CPU = (float *)malloc(sizeof(float) * width * height);
-	uint8_t *pedge_CPU = (uint8_t *)malloc(sizeof(uint8_t) * width * height);
-
-	
-	uint32_t *accum_CPU = (uint32_t*)malloc(accu_width*accu_height*sizeof(uint32_t));
-
-	canny(im, imEdge_CPU,
-		NR_CPU, G_CPU, phi_CPU, Gx_CPU, Gy_CPU, pedge_CPU,
-		1000.0f, //level
-		height, width);
-
-	/* hough transform */
-	houghtransform(imEdge, width, height, accum_CPU, accu_width, accu_height, sin_table, cos_table);
-
 
 	/* CUDA vesion */
 
@@ -437,29 +281,15 @@ void line_asist_GPU(uint8_t *im, int height, int width,
 		height, width);	
 	cudaDeviceSynchronize();
 
-	uint32_t *accum_GPU;
 	float* sin_table_GPU;
 	float* cos_table_GPU;
-	int size_accum = accu_width*accu_height*sizeof(uint32_t);
 	int size_table = 180*sizeof(float);
-	cudaMalloc((void **)&accum_GPU, size_accum);
 	cudaMalloc((void **)&sin_table_GPU, size_table);
 	cudaMalloc((void **)&cos_table_GPU, size_table);
 
 	cudaMemcpy(sin_table_GPU, sin_table, size_table, cudaMemcpyHostToDevice);
 	cudaMemcpy(cos_table_GPU, cos_table, size_table, cudaMemcpyHostToDevice);
 
-	dim3 dimBlock_init(NTHREADS);
-	blocks_h = (accu_height*accu_width)/NTHREADS;
-	if ((accu_height*accu_width)%NTHREADS>0) blocks_h++;
-	dim3 dimGrid_init(blocks_h);
-	gpu_hough_init<<<dimGrid_init,dimBlock_init>>>(imEdge_GPU, width, height, accum_GPU, accu_width, accu_height, 
-		sin_table_GPU, cos_table_GPU);
-	cudaDeviceSynchronize();
-
-	gpu_hough_exec<<<dimGrid,dimBlock>>>(imEdge_GPU, width, height, accum_GPU, accu_width, accu_height, 
-		sin_table_GPU, cos_table_GPU);
-	cudaDeviceSynchronize();
 
 	cudaMemcpy(imEdge, imEdge_GPU, size_uint8, cudaMemcpyDeviceToHost);
 	cudaMemcpy(NR, NR_GPU, size_float, cudaMemcpyDeviceToHost);
@@ -468,7 +298,6 @@ void line_asist_GPU(uint8_t *im, int height, int width,
 	cudaMemcpy(Gx, Gx_GPU, size_float, cudaMemcpyDeviceToHost);
 	cudaMemcpy(Gy, Gy_GPU, size_float, cudaMemcpyDeviceToHost);
 	cudaMemcpy(pedge, pedge_GPU, size_uint8, cudaMemcpyDeviceToHost);
-	cudaMemcpy(accum, accum_GPU, size_accum, cudaMemcpyDeviceToHost);
 
 	cudaFree(im_GPU);
 	cudaFree(imEdge_GPU);
@@ -478,47 +307,15 @@ void line_asist_GPU(uint8_t *im, int height, int width,
 	cudaFree(Gx_GPU);
 	cudaFree(Gy_GPU);
 	cudaFree(pedge_GPU); 
-	cudaFree(accum_GPU); 
 	cudaFree(sin_table_GPU);
 	cudaFree(cos_table_GPU);
 
-	//Comprobacion de canny
-	int i, j, desigual;
-	i=0;
-	desigual=0;
-	while(i<height && desigual<5){
-		j=0;
-		while(j<width && desigual<5){
-			/*if(NR[i*width+j] != NR_CPU[i*width+j]){
-				printf("NR!= : NR_GPU[%d][%d]: %f  NR_CPU[%d][%d]: %f\n", i, j, NR[i*width+j], i,j,NR_CPU[i*width+j]);
-				desigual++;
-			} BIEN */
-			/*if(G[i*width+j] != G_CPU[i*width+j]){
-				printf("G!= : G_GPU[%d][%d]: %f  G_CPU[%d][%d]: %f\n", i, j, G[i*width+j], i,j,G_CPU[i*width+j]);
-				desigual++;
-			} BIEN */
-			
-			/*if(pedge[i*width+j] != pedge_CPU[i*width+j]){
-				printf("pedge!= : pedge_GPU[%d][%d]: %d  pedge_CPU[%d][%d]: %d\n", i, j, pedge[i*width+j], i,j,pedge_CPU[i*width+j]);
-				desigual++;
-			} BIEN */
-			/*if(phi[i*width+j] != phi_CPU[i*width+j]){
-				printf("phi!= : phi_GPU[%d][%d]: %f  phi_CPU[%d][%d]: %f\n", i, j, phi[i*width+j], i,j,phi_CPU[i*width+j]);
-				desigual++;
-			} BIEN */
-			/*if(imEdge[i*width+j] != imEdge_CPU[i*width+j]){
-				printf("imEdge!= : imEdge_GPU[%d][%d]: %d  imEdge_CPU[%d][%d]: %d\n", i, j, imEdge[i*width+j], i,j,imEdge_CPU[i*width+j]);
-				desigual++;
-			} BIEN */
-			if(accum[i*width+j] != accum_CPU[i*width+j]){
-				printf("accum!= : accum_GPU[%d][%d]: %d  accum_CPU[%d][%d]: %d\n", i, j, accum[i*width+j], i,j,accum_CPU[i*width+j]);
-				desigual++;
-			}
-			
-			j++;
-		}
-		i++;
-	}
+	/* hough transform 
+		ejecutamos en CPU porque los accesos a accum pueden tener riesgos de acceso a memoria que producen errores
+	*/
+	houghtransform(imEdge, width, height, accum, accu_width, accu_height, sin_table, cos_table);
+
+
 
 	if (width>height) threshold = width/6;
 	else threshold = height/6;
