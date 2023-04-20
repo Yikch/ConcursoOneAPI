@@ -52,38 +52,56 @@ int main(int argc, char** argv)
 
 	int iter = 0;
 
-#pragma acc ...
+#ifdef _OPENACC
+	acc_init(acc_device_not_host);
+	int numdevices = acc_get_num_devices(acc_device_not_host);
+	printf(" Compiling with OpenACC support NUM_DEVICES=%i\n", numdevices);
+#endif
+
+#pragma acc data copy(A[0:n*m]) copy(Anew[0:n*m])
 {
 	StartTimer();
 
 	while ( error > tol && iter < iter_max )
 	{
 		error = 0.0;
-
+		#pragma acc kernels loop independent
 		for( int j = 1; j < n-1; j++)
 		{
+			#pragma acc data present(A[0:n*m]) present(Anew[0:n*m])
+			{
+			#pragma acc loop seq
 			for( int i = 1; i < m-1; i++ )
 			{
 				Anew[j*m+i] = 0.25 * ( A[j*m+i+1] + A[j*m+i-1]
 					+ A[(j-1)*m+i] + A[(j+1)*m+i]);
 				error = fmax( error, fabs(Anew[j*m+i] - A[j*m+i]));
 			}
-		}
-
-		for( int j = 1; j < n-1; j++)
-		{
-			for( int i = 1; i < m-1; i++ )
-			{
-				A[j*m+i] = Anew[j*m+i];    
 			}
 		}
-
+		
+		#pragma acc loop independent
+		for( int j = 1; j < n-1; j++)
+		{
+			#pragma acc data present(A[0:n*m]) present(Anew[0:n*m])
+			{
+			#pragma acc loop independent
+			for( int i = 1; i < m-1; i++ )
+			{
+				A[j*m+i] = Anew[j*m+i];
+			}
+			}
+		}
+		
 		if(iter % 10 == 0) printf("%5d, %0.6f\n", iter, error);
 
 		iter++;
 	}
 	runtime = GetTimer();
 }
+#ifdef _OPENACC
+acc_shutdown(acc_device_not_host);
+#endif
 
 	printf(" total: %f s\n", runtime / 1000);
 }
