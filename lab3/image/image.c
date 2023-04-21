@@ -2,13 +2,14 @@
 #include <stdlib.h>
 #include <time.h>
 #include <math.h>
+#include <sys/time.h>
 #ifdef _OPENACC
 #include <openacc.h>
 #endif
 
 
 double get_time(){
-	static struct timeval 	tv0;
+	static struct timeval tv0;
 	double time_, time;
 
 	gettimeofday(&tv0,(struct timezone*)0);
@@ -64,7 +65,6 @@ unsigned char *readBMP(char *file_name, char header[54], int *w, int *h)
 	//*************************************
 	unsigned char *image = (unsigned char*)malloc(imagesize+256+width*6); //Se reservan "imagesize+256+width*6" bytes y se devuelve un puntero a estos datos
 
-	unsigned char *tmp;
 	image+=128+width*3;
 	if ((n=fread(image, 1, imagesize+1, f))!=imagesize)
 		fprintf(stderr, "File size incorrect: %d bytes read insted of %d\n", n, imagesize), exit(1);
@@ -150,19 +150,25 @@ void border(float *im, float *image_out,
 	filt[0] =  0.0; filt[1] = -1.0; filt[2] =  0.0;
 	filt[3] = -1.0; filt[4] =  4.0; filt[5] = -1.0;
 	filt[6] =  0.0; filt[7] = -1.0; filt[8] =  0.0;
-
-#pragma acc ...
+#ifdef _OPENACC
+acc_init(acc_device_not_host);
+printf(" Compiling with OpenACC support \n");
+#endif
+#pragma acc data copyout(image_out[0:width*height]) copyin(im[0:width*height]) copyin(filt[0:3*3])
 {
 
 	t0 = get_time();
-
+	#pragma acc kernels loop independent
 	for(i=ws2; i<height-ws2; i++)
 	{
+		#pragma acc loop independent
 		for(j=ws2; j<width-ws2; j++)
 		{
 			tmp = 0.0;
+			#pragma acc loop seq
 			for (ii =-ws2; ii<=ws2; ii++)
 			{
+				#pragma acc loop seq
 				for (jj =-ws2; jj<=ws2; jj++)
 					 tmp += im[(i+ii)*width + (j+jj)]*filt[(ii+ws2)*window_size + jj+ws2];
 			}
@@ -179,6 +185,9 @@ void border(float *im, float *image_out,
 	printf("Exection time %f ms.\n", t1-t0);
 
 }
+#ifdef _OPENACC
+acc_shutdown(acc_device_not_host);
+#endif
 }
 
 void freeMemory(unsigned char *imageUCHAR, float *imageBW, float *imageOUT)
