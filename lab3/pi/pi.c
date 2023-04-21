@@ -34,11 +34,18 @@ int main(int argc, char **argv)
 
 	t0 = get_time();
 	area= 0.0;
-#pragma acc ...
+#ifdef _OPENACC
+	acc_init(acc_device_not_host);
+	printf(" Compiling with OpenACC support \n");
+#endif
+#pragma acc kernels loop independent
 	for(i=1; i<n; i++) {
 		x = (i+0.5)/n;
 		area += 4.0/(1.0 + x*x);
 	}
+#ifdef _OPENACC
+	acc_shutdown(acc_device_not_host);
+#endif
 	pi = area/n;
 	t1 = get_time();
 	printf("PI=%3.10f time=%lf (s)\n", pi, t1-t0);
