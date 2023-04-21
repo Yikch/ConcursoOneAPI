@@ -4,6 +4,9 @@
 
 #include <sys/time.h>
 #include <sys/resource.h>
+#ifdef _OPENACC
+#include <openacc.h>
+#endif
 
 double get_time(){
 	static struct timeval 	tv0;
@@ -19,6 +22,9 @@ double get_time(){
 typedef struct { float m, x, y, z, vx, vy, vz; } body;
 
 void randomizeBodies(body *data, int n) {
+	#pragma acc data copyout(data[0:n])
+	{
+	#pragma acc loop seq
 	for (int i = 0; i < n; i++) {
 		data[i].m  = 2.0f * (rand() / (float)RAND_MAX) - 1.0f;
 
@@ -30,13 +36,16 @@ void randomizeBodies(body *data, int n) {
 		data[i].vy = 2.0f * (rand() / (float)RAND_MAX) - 1.0f;
 		data[i].vz = 2.0f * (rand() / (float)RAND_MAX) - 1.0f;
 	}
+	}
 }
 
 void bodyForce(body *p, float dt, int n) {
-
+	#pragma acc data copyin(p[0:n])
+	{
+	#pragma acc kernels loop independent
 	for (int i = 0; i < n; i++) { 
 		float Fx = 0.0f; float Fy = 0.0f; float Fz = 0.0f;
-
+		#pragma acc loop seq
 		for (int j = 0; j < n; j++) {
 			if (i!=j) {
 				float dx = p[j].x - p[i].x;
@@ -57,13 +66,18 @@ void bodyForce(body *p, float dt, int n) {
 
 		p[i].vx += dt*Fx/p[i].m; p[i].vy += dt*Fy/p[i].m; p[i].vz += dt*Fz/p[i].m;
 	}
+	}
 }
 
 void integrate(body *p, float dt, int n){
+	#pragma acc data copy(p[0:n])
+	{
+	#pragma acc kernels loop independent
 	for (int i = 0 ; i < n; i++) {
 		p[i].x += p[i].vx*dt;
 		p[i].y += p[i].vy*dt;
 		p[i].z += p[i].vz*dt;
+	}
 	}
 }
 
@@ -76,7 +90,10 @@ int main(const int argc, const char** argv) {
 	const int nIters = 100;  // simulation iterations
 
 	body *p = (body*)malloc(nBodies*sizeof(body));
-
+#ifdef _OPENACC
+acc_init(acc_device_not_host);
+printf(" Compiling with OpenACC support \n");
+#endif
 	randomizeBodies(p, nBodies); // Init pos / vel data
 
 	double t0 = get_time();
@@ -85,7 +102,9 @@ int main(const int argc, const char** argv) {
 		bodyForce(p, dt, nBodies); // compute interbody forces
 		integrate(p, dt, nBodies); // integrate position
 	}
-
+#ifdef _OPENACC
+acc_shutdown(acc_device_not_host);
+#endif
 	double totalTime = get_time()-t0; 
 	printf("%d Bodies with %d iterations: %0.3f Millions Interactions/second\n", nBodies, nIters, 1e-6 * nBodies * nBodies / totalTime);
 
