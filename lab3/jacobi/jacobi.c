@@ -68,8 +68,7 @@ int main(int argc, char** argv)
 		#pragma acc kernels loop independent
 		for( int j = 1; j < n-1; j++)
 		{
-			#pragma acc data present(A[0:n*m]) present(Anew[0:n*m])
-			{
+			
 			#pragma acc loop seq
 			for( int i = 1; i < m-1; i++ )
 			{
@@ -77,20 +76,19 @@ int main(int argc, char** argv)
 					+ A[(j-1)*m+i] + A[(j+1)*m+i]);
 				error = fmax( error, fabs(Anew[j*m+i] - A[j*m+i]));
 			}
-			}
+			
 		}
 		
-		#pragma acc loop independent
+		#pragma acc kernels loop independent
 		for( int j = 1; j < n-1; j++)
 		{
-			#pragma acc data present(A[0:n*m]) present(Anew[0:n*m])
-			{
+			
 			#pragma acc loop independent
 			for( int i = 1; i < m-1; i++ )
 			{
 				A[j*m+i] = Anew[j*m+i];
 			}
-			}
+			
 		}
 		
 		if(iter % 10 == 0) printf("%5d, %0.6f\n", iter, error);
