@@ -170,14 +170,9 @@ double gettime() {
 int
 main( int argc, char** argv) 
 {
-#ifdef _OPENACC
-acc_init(acc_device_not_host);
-printf(" Compiling with OpenACC support \n");
-#endif
+
     runTest( argc, argv);
-#ifdef _OPENACC
-acc_shutdown(acc_device_not_host);
-#endif
+
     return EXIT_SUCCESS;
 }
 
@@ -256,7 +251,6 @@ void runTest( int argc, char** argv)
 
 	printf("Start Needleman-Wunsch\n");
 
-
 	for( int i=0; i< max_cols-1 ; i++){
 		if (blosum) input1[i] = rand() % 10 + 1;
 		else input1[i] = set_amino_symbol(string1[i]);
@@ -268,31 +262,31 @@ void runTest( int argc, char** argv)
 
 
 	/* Initialization */
-	#pragma data copyout(nw_matrix[0:max_rows*max_cols])
-	{
-	#pragma acc kernels loop independent
-	{
 	for (int i = 0 ; i < max_rows; i++)
-		#pragma acc loop independent
 		for (int j = 0 ; j < max_cols; j++)
 			nw_matrix[i*max_cols+j]=0;
-	}
-	#pragma acc kernels loop independent
+	
 	for( int i = 1; i< max_rows ; i++)
 		nw_matrix[i*max_cols] = i * penalty;
-	#pragma acc kenels loop independent
+
 	for( int j = 1; j< max_cols ; j++)
 		nw_matrix[j] = j * penalty;
-	}
+	
 
 	/********************/
 	/* Needleman-Wunsch */
 	/********************/
 	t0 = gettime();
+#ifdef _OPENACC
+acc_init(acc_device_not_host);
+printf(" Compiling with OpenACC support \n");
+#endif
 	/* Compute top-left matrix */
-	#pragma acc data copyin(blosum62[0:24*24]) copyin(input1[0:max_cols]) copyin(input2[0:max_rows])
+	#pragma acc data copyin(blosum62[0:24][0:24]) copyin(input1[0:max_cols]) copyin(input2[0:max_rows]) copy(nw_matrix[0:max_rows*max_cols])
 	{
+	#pragma acc loop seq
 	for( int i = 0 ; i < max_rows-2 ; i++){
+		#pragma acc kernels loop independent
 		for( idx = 0 ; idx <= i ; idx++){
 			index = (idx + 1) * max_cols + (i + 1 - idx);
 
@@ -310,10 +304,12 @@ void runTest( int argc, char** argv)
 			nw_matrix[index] = MAXIMUM(match, delet, insert);
 		}
 	}
-	}
+	
 
 	/* Compute diagonals matrix */
+	#pragma acc loop seq
 	for( int i = max_rows-2; i < max_cols-2 ; i++){
+		#pragma acc kernels loop independent
 		for( idx = 0 ; idx <= max_rows-2; idx++){
 			index = (idx + 1) * max_cols + (i + 1 - idx);
 
@@ -331,9 +327,12 @@ void runTest( int argc, char** argv)
 			nw_matrix[index] = MAXIMUM(match, delet, insert);
 		}
 	}
+	
 
 	/* Compute bottom-right matrix */
+	#pragma acc loop seq
 	for( int i = max_rows-2; i >= 0 ; i--){
+		#pragma acc kernels loop independent
 		for( idx = 0 ; idx <= i; idx++){
 			index =  ( idx+max_rows-1-i ) * max_cols + max_cols-idx-1 ;
 
@@ -351,7 +350,10 @@ void runTest( int argc, char** argv)
 			nw_matrix[index] = MAXIMUM(match, delet, insert);
 		}
 	}
-
+	}
+#ifdef _OPENACC
+acc_shutdown(acc_device_not_host);
+#endif
 	t1 = gettime();
 
 	printf("\nPerformance %f GCUPS\n", 1.0e-9*((max_rows-1)*(max_cols-1)/(t1-t0)));
